@@ -1,2 +1,5 @@
 .env
 *.pdf
+.vscode
+.venv
+.DS_Store
