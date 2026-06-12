@@ -13,34 +13,57 @@ api_key = os.getenv("GROQ_API_KEY")
 
 llm = ChatGroq(model="llama-3.1-8b-instant", api_key=api_key)
 
-# initialise chat history
+# initialise session state
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# initialise vectorstore
 if "vectorstore" not in st.session_state:
     st.session_state.vectorstore = None
 
+if "processed_files" not in st.session_state:
+    st.session_state.processed_files = []
+
 st.title("Document Q&A App")
-st.write("Upload a PDF and ask questions about it!")
+st.write("Upload PDFs and ask questions about them!")
 
-uploaded_file = st.file_uploader("Upload your PDF", type="pdf")
+uploaded_files = st.file_uploader(
+    "Upload your PDFs",
+    type="pdf",
+    accept_multiple_files=True
+)
 
-if uploaded_file and st.session_state.vectorstore is None:
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as f:
-        f.write(uploaded_file.read())
-        temp_path = f.name
-
-    loader = PyPDFLoader(temp_path)
-    pages = loader.load()
-    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
-    chunks = splitter.split_documents(pages)
+if uploaded_files:
     embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-    st.session_state.vectorstore = Chroma.from_documents(
-        documents=chunks,
-        embedding=embeddings
-    )
-    st.success("PDF processed! You can now ask questions.")
+    
+    for uploaded_file in uploaded_files:
+        if uploaded_file.name not in st.session_state.processed_files:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as f:
+                f.write(uploaded_file.read())
+                temp_path = f.name
+
+            loader = PyPDFLoader(temp_path)
+            pages = loader.load()
+
+            # add source metadata to each page
+            for page in pages:
+                page.metadata["source"] = uploaded_file.name
+
+            splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
+            chunks = splitter.split_documents(pages)
+
+            if st.session_state.vectorstore is None:
+                st.session_state.vectorstore = Chroma.from_documents(
+                    documents=chunks,
+                    embedding=embeddings
+                )
+            else:
+                st.session_state.vectorstore.add_documents(chunks)
+
+            st.session_state.processed_files.append(uploaded_file.name)
+            st.success(f"{uploaded_file.name} processed!")
+
+if st.session_state.processed_files:
+    st.info(f"Loaded documents: {', '.join(st.session_state.processed_files)}")
 
 # display chat history
 for message in st.session_state.messages:
@@ -48,16 +71,14 @@ for message in st.session_state.messages:
         st.write(message["content"])
 
 # chat input
-query = st.chat_input("Ask a question about your document")
+query = st.chat_input("Ask a question about your documents")
 
 if query and st.session_state.vectorstore:
-    # add user message to history
     st.session_state.messages.append({"role": "user", "content": query})
-    
+
     with st.chat_message("user"):
         st.write(query)
 
-    # build conversation history string
     history = "\n".join([
         f"{m['role'].upper()}: {m['content']}"
         for m in st.session_state.messages[:-1]
@@ -65,13 +86,15 @@ if query and st.session_state.vectorstore:
 
     retriever = st.session_state.vectorstore.as_retriever(search_kwargs={"k": 6})
     docs = retriever.invoke(query)
-    context = "\n".join([doc.page_content for doc in docs])
+    context = "\n".join([
+        f"[Source: {doc.metadata['source']}]\n{doc.page_content}"
+        for doc in docs
+    ])
 
     response = llm.invoke(
         f"Conversation history:\n{history}\n\nContext:\n{context}\n\nQuestion: {query}"
     )
 
-    # add assistant response to history
     st.session_state.messages.append({
         "role": "assistant",
         "content": response.content
