@@ -34,7 +34,7 @@ uploaded_files = st.file_uploader(
 
 if uploaded_files:
     embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-    
+
     for uploaded_file in uploaded_files:
         if uploaded_file.name not in st.session_state.processed_files:
             with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as f:
@@ -44,7 +44,6 @@ if uploaded_files:
             loader = PyPDFLoader(temp_path)
             pages = loader.load()
 
-            # add source metadata to each page
             for page in pages:
                 page.metadata["source"] = uploaded_file.name
 
@@ -69,6 +68,10 @@ if st.session_state.processed_files:
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.write(message["content"])
+        if "sources" in message:
+            with st.expander("📄 Sources"):
+                for source in message["sources"]:
+                    st.write(f"- {source}")
 
 # chat input
 query = st.chat_input("Ask a question about your documents")
@@ -86,19 +89,33 @@ if query and st.session_state.vectorstore:
 
     retriever = st.session_state.vectorstore.as_retriever(search_kwargs={"k": 6})
     docs = retriever.invoke(query)
+
+    # get unique sources
+    sources = list(set([doc.metadata["source"] for doc in docs]))
+
     context = "\n".join([
         f"[Source: {doc.metadata['source']}]\n{doc.page_content}"
         for doc in docs
     ])
 
-    response = llm.invoke(
-        f"Conversation history:\n{history}\n\nContext:\n{context}\n\nQuestion: {query}"
-    )
+    # streaming response
+    with st.chat_message("assistant"):
+        response_placeholder = st.empty()
+        full_response = ""
+
+        for chunk in llm.stream(
+            f"Conversation history:\n{history}\n\nContext:\n{context}\n\nQuestion: {query}"
+        ):
+            full_response += chunk.content
+            response_placeholder.write(full_response)
+
+        # show sources below answer
+        with st.expander("📄 Sources"):
+            for source in sources:
+                st.write(f"- {source}")
 
     st.session_state.messages.append({
         "role": "assistant",
-        "content": response.content
+        "content": full_response,
+        "sources": sources
     })
-
-    with st.chat_message("assistant"):
-        st.write(response.content)
