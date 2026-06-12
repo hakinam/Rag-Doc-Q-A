@@ -7,6 +7,10 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 import tempfile
+import uuid
+
+if "session_id" not in st.session_state:
+    st.session_state.session_id = str(uuid.uuid4())
 
 load_dotenv()
 api_key = os.getenv("GROQ_API_KEY")
@@ -64,7 +68,8 @@ with st.sidebar:
                     if st.session_state.vectorstore is None:
                         st.session_state.vectorstore = Chroma.from_documents(
                             documents=chunks,
-                            embedding=embeddings
+                            embedding=embeddings,
+                            collection_name=st.session_state.session_id
                         )
                     else:
                         st.session_state.vectorstore.add_documents(chunks)
