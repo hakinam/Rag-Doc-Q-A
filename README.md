@@ -24,7 +24,7 @@ PaperBrain is an AI-powered document assistant that lets you upload multiple PDF
 ## ⚙️ Run Locally
 
 1. Clone the repo
-   - git clone https://github.com/hakinam/doc-qa-app.git
+   - git clone https://github.com/hakinam/paperbrain.git
    - cd doc-qa-app
 2. Install dependencies
    - pip install -r requirements.txt
