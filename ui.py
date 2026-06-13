@@ -8,6 +8,7 @@ from langchain_community.vectorstores import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
 import tempfile
 import uuid
+from sentence_transformers import CrossEncoder
 
 if "session_id" not in st.session_state:
     st.session_state.session_id = str(uuid.uuid4())
@@ -141,8 +142,27 @@ else:
 
         # remove duplicates
         docs = list({doc.page_content: doc for doc in all_docs}.values())
-        docs = list({doc.page_content: doc for doc in docs}.values())
 
+        # reranking
+        if "reranker" not in st.session_state:
+            st.session_state.reranker = CrossEncoder("cross-encoder/ms-marco-TinyBERT-L-2-v2")
+        scores = st.session_state.reranker.predict([(query, doc.page_content) for doc in docs])
+        ranked_docs = sorted(zip(scores, docs), reverse=True)
+        docs = [doc for score, doc in ranked_docs[:4]]
+
+        # debug info
+        with st.expander("🔍 Debug Info"):
+            st.write("**Generated Queries:**")
+            for q in generated_queries:
+                st.write(f"- {q}")
+
+            st.write(f"**Chunks before reranking:** {len(all_docs)}")
+            st.write(f"**Chunks after deduplication:** {len(ranked_docs)}")
+            st.write(f"**Chunks after reranking:** {len(docs)}")
+
+            st.write("**Reranking Scores:**")
+            for score, doc in ranked_docs:
+                st.write(f"- Score: `{round(float(score), 4)}` | {doc.page_content[:80]}...")
 
         sources = list(set([doc.metadata["source"] for doc in docs]))
         context = "\n".join([
@@ -155,8 +175,19 @@ else:
             full_response = ""
 
             for chunk in llm.stream(
-                f"Conversation history:\n{history}\n\nContext:\n{context}\n\nQuestion: {query}"
+                f"""You are a helpful assistant. Answer ONLY from the provided context.
+            If the answer is not in the context, say 'This information is not available in the uploaded documents.'
+            Do not use your own knowledge or make assumptions.
+
+            Conversation history:
+            {history}
+
+            Context:
+            {context}
+
+            Question: {query}"""
             ):
+
                 full_response += chunk.content
                 response_placeholder.write(full_response)
 
