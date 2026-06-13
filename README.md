@@ -3,7 +3,7 @@
 PaperBrain is an AI-powered document assistant that lets you upload multiple PDFs and have a conversation with them. Ask questions, get answers, and see exactly which document the answer came from.
 
 ## 🚀 Live Demo
-[Try PaperBrain here](https://rag-doc-q-a.streamlit.app)
+[Try PaperBrain here](https://paper-brain.streamlit.app/)
 
 ## ✨ Features
 - 📄 Upload multiple PDFs at once
