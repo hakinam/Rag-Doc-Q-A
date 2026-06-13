@@ -121,8 +121,29 @@ else:
             for m in st.session_state.messages[:-1]
         ])
 
-        retriever = st.session_state.vectorstore.as_retriever(search_kwargs={"k": 6})
-        docs = retriever.invoke(query)
+        # generate multiple queries using LLM
+        query_prompt = f"""Generate 3 different versions of this question to help retrieve relevant documents.
+        Return only the questions, one per line, nothing else.
+
+        Original question: {query}"""
+
+        query_response = llm.invoke(query_prompt)
+        generated_queries = query_response.content.strip().split("\n")
+        generated_queries = [q for q in generated_queries if q.strip()]
+        generated_queries.append(query)  # add original query too
+
+        # retrieve chunks for all queries
+        retriever = st.session_state.vectorstore.as_retriever(search_kwargs={"k": 4})
+        all_docs = []
+        for q in generated_queries:
+            docs = retriever.invoke(q)
+            all_docs.extend(docs)
+
+        # remove duplicates
+        docs = list({doc.page_content: doc for doc in all_docs}.values())
+        docs = list({doc.page_content: doc for doc in docs}.values())
+
+
         sources = list(set([doc.metadata["source"] for doc in docs]))
         context = "\n".join([
             f"[Source: {doc.metadata['source']}]\n{doc.page_content}"
