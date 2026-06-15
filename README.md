@@ -1,6 +1,6 @@
 # 🧠 PaperBrain
 
-PaperBrain is a production-grade AI document intelligence system that lets you upload multiple PDFs and have a natural language conversation with them. Built with an advanced RAG pipeline featuring multi-query retrieval, cross-encoder reranking, and hallucination prevention.
+PaperBrain is a production grade AI document intelligence system that lets you upload multiple PDFs and have a natural language conversation with them. Built with an advanced RAG pipeline featuring multi-query retrieval, cross-encoder reranking, and hallucination prevention.
 
 ## 🚀 Live Demo
 [Try PaperBrain here](https://paper-brain.streamlit.app)
